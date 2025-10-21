@@ -8,6 +8,7 @@ from classes.enums import PublishType
 from config.schema import ConfigSchema
 import queue
 from collections import deque
+import json
 
 class APILimitsManager:
     def __init__(self):
@@ -52,20 +53,101 @@ class MqttHandler:
         self.device_token = config.thingsboard.device_token
         self.tb_host = config.thingsboard.host
         self.tb_port = config.thingsboard.port
-        self.client: TBDeviceMqttClient = TBDeviceMqttClient(host=self.tb_host, username=self.device_token, port=self.tb_port)
-        self.client.connect()
+        self.client: TBDeviceMqttClient = TBDeviceMqttClient(
+            host=self.tb_host, 
+            username=self.device_token, 
+            port=self.tb_port
+        )
         self.api_limits_manager = APILimitsManager()
+        self.rpc_callbacks = {}  # Almacenar callbacks RPC
         logging.getLogger('tb_connection').setLevel(logging.WARNING)
 
     def connect(self):
         try:
             self.client.connect()
-
+            self.logger.info("Connected to ThingsBoard successfully")
         except Exception as e:
             self.logger.error(f"Failed to connect to ThingsBoard: {e}")
 
+    def subscribe_to_rpc(self, method_name: str, callback: Callable):
+        """
+        Suscribe a comandos RPC desde ThingsBoard
+        
+        Args:
+            method_name: Nombre del método RPC (ej: 'silenciar_panel')
+            callback: Función que se ejecutará cuando llegue el comando
+        """
+        try:
+            self.rpc_callbacks[method_name] = callback
+            # Configurar el callback genérico RPC si no existe
+            if not hasattr(self, '_rpc_configured'):
+                self.client.set_server_side_rpc_request_handler(self._handle_rpc_request)
+                self._rpc_configured = True
+            self.logger.info(f"Subscribed to RPC method: {method_name}")
+        except Exception as e:
+            self.logger.error(f"Error subscribing to RPC: {e}")
+
+    def _handle_rpc_request(self, request_id, request_body):
+        """
+        Maneja todas las peticiones RPC entrantes
+        IMPORTANTE: La firma debe ser (request_id, request_body) para tb-mqtt-client
+        """
+        try:
+            self.logger.info(f"RPC request received - ID: {request_id}, Body: {request_body}")
+            
+            method = request_body.get('method')
+            params = request_body.get('params', {})
+            
+            if method in self.rpc_callbacks:
+                # Ejecutar el callback correspondiente en un thread separado
+                def execute_callback():
+                    try:
+                        result = self.rpc_callbacks[method](params)
+                        
+                        # Enviar respuesta a ThingsBoard
+                        response = {
+                            "success": True,
+                            "result": result if result else "Comando ejecutado correctamente"
+                        }
+                        self.client.send_rpc_reply(request_id, response)
+                        self.logger.info(f"RPC response sent: {response}")
+                        
+                    except Exception as e:
+                        self.logger.error(f"Error executing RPC callback: {e}")
+                        error_response = {
+                            "success": False,
+                            "error": str(e)
+                        }
+                        try:
+                            self.client.send_rpc_reply(request_id, error_response)
+                        except Exception as send_error:
+                            self.logger.error(f"Failed to send error response: {send_error}")
+                
+                # Ejecutar en thread separado para no bloquear
+                threading.Thread(target=execute_callback, daemon=True).start()
+                
+            else:
+                self.logger.warning(f"Unknown RPC method: {method}")
+                response = {
+                    "success": False,
+                    "error": f"Método '{method}' no reconocido"
+                }
+                self.client.send_rpc_reply(request_id, response)
+                self.logger.debug(f"RPC error response sent: {response}")
+            
+        except Exception as e:
+            self.logger.error(f"Error handling RPC request: {e}", exc_info=True)
+            error_response = {
+                "success": False,
+                "error": f"Error interno: {str(e)}"
+            }
+            try:
+                self.client.send_rpc_reply(request_id, error_response)
+            except Exception as send_error:
+                self.logger.error(f"Failed to send error response: {send_error}")
+
     def publish_telemetry(self, telemetry: Dict[str, Any], bypass_queue: bool = False):
-        if not self.client.is_connected:
+        if not self.client.is_connected():
             if bypass_queue:
                 self.logger.warning("Not connected to ThingsBoard. Dropping telemetry.")
                 return
@@ -92,7 +174,7 @@ class MqttHandler:
                 self.queue.put((PublishType.TELEMETRY, telemetry))
 
     def publish_attributes(self, attributes: Dict[str, Any]):
-        if not self.client.is_connected:
+        if not self.client.is_connected():
             self.logger.warning("Not connected to ThingsBoard. Queueing attributes.")
             self.queue.put((PublishType.ATTRIBUTE, attributes))
             return
@@ -118,7 +200,7 @@ class MqttHandler:
 
     def process_queue(self):
         while not self.shutdown_flag.is_set():
-            if self.client.is_connected:
+            if self.client.is_connected():
                 try:
                     message_type, message = self.queue.get(block=False)
                     if self.api_limits_manager.can_send():

@@ -23,7 +23,7 @@ relay_monitor:
   trouble_active_high: false
 # Agregar esta sección al archivo config.yml
 silence_relay:
-  pin: 17  # GPIO 17 para el relay de silencio
+  pin: 22  # GPIO 22 para el relay de silencio
   activation_time: 5  # Tiempo en segundos que el relay permanecerá activo (ajustar según FRM-1)
   active_high: true  # true si el relay se activa con señal HIGH, false para LOW
 

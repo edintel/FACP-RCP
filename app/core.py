@@ -5,7 +5,7 @@ from classes.specific_serial_handler import Edwards_iO1000, Edwards_EST3x, Notif
 from app_utils.queue_operations import SafeQueue
 from components.update_app import update_check_thread
 from components.relay_controller import RelayController
-from components.silence_controller import SilenceController  # NUEVO
+from components.silence_controller import SilenceController
 from components.queue_manager import QueueManager
 from components.thread_manager import ThreadManager
 from classes.relay_monitor import RelayMonitor
@@ -22,7 +22,7 @@ class Application:
 
         self.queue_manager = QueueManager(self.queue, "queue_backup.pkl")
         self.relay_controller = RelayController(config.relay)
-        self.silence_controller = SilenceController(config.silence_relay, self.mqtt_handler)  # NUEVO
+        self.silence_controller = SilenceController(config.silence_relay, self.mqtt_handler)
         self.relay_monitor = RelayMonitor(config, self.mqtt_handler)
         self.thread_manager = ThreadManager()
 
@@ -44,13 +44,35 @@ class Application:
         
         return handler_class(self.config, severity_list, self.queue)
 
+    def _setup_rpc_handlers(self):
+        """Configura los manejadores de comandos RPC desde ThingsBoard"""
+        try:
+            # Suscribirse al comando RPC de silencio
+            self.mqtt_handler.subscribe_to_rpc(
+                'silenciar_panel',
+                self.silence_controller.handle_silence_rpc
+            )
+            self.logger.info("RPC handlers configured successfully")
+            
+            # Publicar estado inicial
+            initial_attributes = {
+                "silence_relay_configured": True,
+                "silence_relay_pin": self.config.silence_relay.pin,
+                "silence_activation_time": self.config.silence_relay.activation_time,
+                "device_ready": True
+            }
+            self.mqtt_handler.publish_attributes(initial_attributes)
+            
+        except Exception as e:
+            self.logger.error(f"Error setting up RPC handlers: {e}")
+
     def start(self):
         self.logger.info("Starting application...")
         self.queue_manager.load_queue()
         self.mqtt_handler.start()
         
-        # Suscribirse al atributo de silencio en ThingsBoard
-        self._setup_silence_subscription()
+        # Configurar manejadores RPC
+        self._setup_rpc_handlers()
         
         self.serial_handler = self._create_serial_handler()
         
@@ -70,31 +92,12 @@ class Application:
         finally:
             self.shutdown()
 
-    def _setup_silence_subscription(self):
-        """Configura la suscripción al atributo de silencio en ThingsBoard"""
-        try:
-            # Suscribirse a cambios en el atributo 'silence_panel'
-            self.mqtt_handler.subscribe_to_attribute(
-                'silence_panel', 
-                self.silence_relay_controller.handle_attribute_update
-            )
-            self.logger.info("Subscribed to 'silence_panel' attribute in ThingsBoard")
-            
-            # Opcionalmente, solicitar el valor actual del atributo
-            self.mqtt_handler.request_attributes(
-                client_attribute_names=[],
-                shared_attribute_names=['silence_panel'],
-                callback=self.silence_relay_controller.handle_attribute_update
-            )
-        except Exception as e:
-            self.logger.error(f"Error setting up silence subscription: {e}")
-
     def shutdown(self):
         self.logger.info("Initiating graceful shutdown...")
         self.thread_manager.stop_all_threads()
         self.queue_manager.save_queue()
         self.relay_controller.cleanup()
-        self.silence_relay_controller.cleanup()  # NUEVO
+        self.silence_controller.cleanup()
         self.relay_monitor.cleanup()
         self.mqtt_handler.stop()
         self.logger.info("Graceful shutdown completed")
