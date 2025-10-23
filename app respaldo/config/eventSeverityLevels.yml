@@ -1,0 +1,118 @@
+#ID_Panel, Evento y su respectivo nivel de severidad
+#Severidad 3: Severo
+#Severidad 2: Advertencia
+#Severidad 1: Notificacion
+
+10001:
+  # Eventos de alarma - Severidad 3 (Severo)
+  HUMO ACT: 3
+  CALOR ACT: 3
+  DUCTO ACT: 3
+  EST MAN ACT: 3
+  FLUJ ACT: 3
+  COAL ACT: 3
+  ALRM ACT: 3
+  Est.Manu: 3
+  ACT ALRM: 3
+  SMK ACT: 3
+  HEAT ACT: 3
+  DUCT ACT: 3
+  PULL ACT: 3
+  WFLW ACT: 3
+  
+  # Eventos de supervisión/monitoreo - Severidad 2 (Advertencia)
+  COSU ACT: 2
+  SUPV ACT: 2
+  COMO ACT: 2
+  MON ACT: 2
+  Salidas bloqueadas: 2
+  PALM ACT: 2
+  ALMV ACT: 2
+  MANT ACT: 2
+  PROB ACT: 2
+  Outputs are latched: 2
+  
+  # EVENTOS DE SILENCIO - AGREGADOS
+  ACTIVA SLENC.REMOTO SILENCIO PANEL: 2
+  DESACTIVA SLENC.REMOTO SILENCIO PANEL: 1
+  SR ACT SLENC.REMOTO SILENCIO PANEL: 1
+  SR RST SLENC.REMOTO SILENCIO PANEL: 1
+  
+  # Eventos de prueba/mantenimiento - Severidad 1 (Notificación)
+  FALL ACT: 1
+  DESH ACT: 1
+  PRBA ACT: 1
+  TRBL ACT: 1
+  DSBL ACT: 1
+  TEST ACT: 1
+  
+  # Eventos de reset - Severidad 1 (Notificación)
+  HUMO RST: 1
+  CALOR RST: 1
+  DUCTO RST: 1
+  EST MAN RST: 1
+  FLUJ RST: 1
+  COAL RST: 1
+  ALRM RST: 1
+  COSU RST: 1
+  SUPV RST: 1
+  COMO RST: 1
+  MON RST: 1
+  PALM RST: 1
+  ALMV RST: 1
+  MANT RST: 1
+  FALL RST: 1
+  DESH RST: 1
+  PRBA RST: 1
+  SMK RST: 1
+  HEAT RST: 1
+  DUCT RST: 1
+  PULL RST: 1
+  WFLW RST: 1
+  PROB RST: 1
+  TRBL RST: 1
+  DSBL RST: 1
+  TEST RST: 1
+  RST ALRM: 1
+  
+  # Sistema normal
+  SISTEMA NORMAL: 1
+
+10002:
+  COMANDO DEL OPERADOR: 2
+  AVER. LOCAL ACT.: 2
+  AVERIA ABIER.ACT: 2
+  MNTR LOCAL ACT.: 2
+  PULSADOR ACTIVO: 3
+  AVER.COMUN ACT.: 2
+  ALARMA ACTIVA: 3
+  ALARMA RESTAUR.: 1
+  PULSADOR REST.: 1
+  AVER. LOCAL REST: 1
+  AVER. COMUN RST.: 1
+  AVER.ABIER.REST: 1
+  MNTR LOCAL RST.: 1
+
+10003:
+  NORMAL TERMICO: 1
+  NORMAL MONITOR: 1
+  APGADO CONTROL: 1
+  REARME DEL SISTEMA: 1
+  AVE: 1
+  APG: 1
+  CAMBIO PROGRAMA: 2
+  CONFIRMAR: 2
+  ALARM: 3
+  SENAL SILENCIADA: 2
+  AVERIA CONTROL: 2
+  AVERIA EN SISTEMA: 2
+  AVERIA MONITOR: 2
+  AVERIA TERMICO: 2
+  BR PRB CONTROL: 1
+  BR PRB MONITOR: 1
+  BR PRB TERMICO: 1
+  BR PRB EN SISTEMA: 1
+  SISTEMA NORMAL: 1
+
+10004:
+  NOT NEEDED BUT WHATEVER: -1
