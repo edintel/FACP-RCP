@@ -2,13 +2,13 @@
 id_modelo_panel: 10001
 #Componentes respectivos a Thingsboard
 thingsboard:
-  device_token: "WJPwjxsesAFbxoJKhw3x"
+  device_token: "Um83AH3oivN9Ca3nMBS4"
   host: "mqtt.thingsboard.cloud"
   port: 1883
 #Componentes respectivos a serial
 serial:
   #Puerto correspondiente en el que se conectara el USB
-  puerto: /dev/serial-adapter
+  puerto: /dev/ttyUSB0
 #Componentes respectivos al control del relay del Test Alive
 relay:
   pin: 8
@@ -19,11 +19,15 @@ relay_monitor:
   alarm_pin: 13
   trouble_pin: 27
   publish_interval: 15
-  alarm_active_high: true
+  alarm_active_high: false
   trouble_active_high: false
-# Agregar esta sección al archivo config.yml
+# Configuración del relay de silencio
 silence_relay:
   pin: 22  # GPIO 22 para el relay de silencio
-  activation_time: 5  # Tiempo en segundos que el relay permanecerá activo (ajustar según FRM-1)
+  activation_time: 5  # Tiempo en segundos que el relay permanecerá activo
   active_high: true  # true si el relay se activa con señal HIGH, false para LOW
-
+# Configuración del relay de reinicio
+reset_relay:
+  pin: 25  # GPIO 25 para el relay de reinicio
+  activation_time: 5  # Tiempo en segundos que el relay permanecerá activo (ajustar según necesidad)
+  active_high: true  # true si el relay se activa con señal HIGH, false para LOW

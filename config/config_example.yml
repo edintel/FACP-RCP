@@ -21,3 +21,13 @@ relay_monitor:
   publish_interval: 15
   alarm_active_high: true
   trouble_active_high: false
+# Configuración del relay de silencio
+silence_relay:
+  pin: 22  # GPIO para el relay de silencio
+  activation_time: 5  # Tiempo en segundos que el relay permanecerá activo
+  active_high: true  # true si el relay se activa con señal HIGH, false para LOW
+# Configuración del relay de reinicio
+reset_relay:
+  pin: 25  # GPIO para el relay de reinicio del panel
+  activation_time: 5  # Tiempo en segundos que el relay permanecerá activo
+  active_high: true  # true si el relay se activa con señal HIGH, false para LOW

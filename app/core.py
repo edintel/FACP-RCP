@@ -6,6 +6,7 @@ from app_utils.queue_operations import SafeQueue
 from components.update_app import update_check_thread
 from components.relay_controller import RelayController
 from components.silence_controller import SilenceController
+from components.reset_controller import ResetController
 from components.queue_manager import QueueManager
 from components.thread_manager import ThreadManager
 from classes.relay_monitor import RelayMonitor
@@ -23,6 +24,7 @@ class Application:
         self.queue_manager = QueueManager(self.queue, "queue_backup.pkl")
         self.relay_controller = RelayController(config.relay)
         self.silence_controller = SilenceController(config.silence_relay, self.mqtt_handler)
+        self.reset_controller = ResetController(config.reset_relay, self.mqtt_handler)
         self.relay_monitor = RelayMonitor(config, self.mqtt_handler)
         self.thread_manager = ThreadManager()
 
@@ -52,6 +54,13 @@ class Application:
                 'silenciar_panel',
                 self.silence_controller.handle_silence_rpc
             )
+            
+            # Suscribirse al comando RPC de reinicio
+            self.mqtt_handler.subscribe_to_rpc(
+                'reiniciar_panel',
+                self.reset_controller.handle_reset_rpc
+            )
+            
             self.logger.info("RPC handlers configured successfully")
             
             # Publicar estado inicial
@@ -59,6 +68,9 @@ class Application:
                 "silence_relay_configured": True,
                 "silence_relay_pin": self.config.silence_relay.pin,
                 "silence_activation_time": self.config.silence_relay.activation_time,
+                "reset_relay_configured": True,
+                "reset_relay_pin": self.config.reset_relay.pin,
+                "reset_activation_time": self.config.reset_relay.activation_time,
                 "device_ready": True
             }
             self.mqtt_handler.publish_attributes(initial_attributes)
@@ -98,6 +110,7 @@ class Application:
         self.queue_manager.save_queue()
         self.relay_controller.cleanup()
         self.silence_controller.cleanup()
+        self.reset_controller.cleanup()
         self.relay_monitor.cleanup()
         self.mqtt_handler.stop()
         self.logger.info("Graceful shutdown completed")

@@ -25,10 +25,16 @@ class SilenceRelayConfig(BaseModel):
     activation_time: int  # Tiempo en segundos que el relay estará activo
     active_high: bool  # True si el relay se activa con HIGH, False si se activa con LOW
 
+class ResetRelayConfig(BaseModel):
+    pin: int
+    activation_time: int  # Tiempo en segundos que el relay estará activo
+    active_high: bool  # True si el relay se activa con HIGH, False si se activa con LOW
+
 class ConfigSchema(BaseModel):
     thingsboard: ThingsboardConfig
     serial: SerialConfig
     relay: RelayConfig
     relay_monitor: RelayMonitorConfig
     silence_relay: SilenceRelayConfig
+    reset_relay: ResetRelayConfig
     id_modelo_panel: int
