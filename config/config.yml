@@ -2,8 +2,8 @@
 id_modelo_panel: 10001
 #Componentes respectivos a Thingsboard
 thingsboard:
-  device_token: "Um83AH3oivN9Ca3nMBS4"
-  host: "mqtt.thingsboard.cloud"
+  device_token: ""
+  host: ""
   port: 1883
 #Componentes respectivos a serial
 serial:
