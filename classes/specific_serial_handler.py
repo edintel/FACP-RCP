@@ -33,8 +33,8 @@ class Edwards_iO1000(SerialPortHandler):
 
     def process_incoming_data(self, shutdown_flag: threading.Event) -> None:
         """
-        Override para Edwards iO1000: procesa cada línea como un evento individual
-        sin esperar líneas vacías, ya que el panel no las envía.
+        Override para Edwards iO1000: procesa cada linea como un evento individual
+        sin esperar lineas vacias, ya que el panel no las envia.
         """
         buffer = ""
 
@@ -49,11 +49,11 @@ class Edwards_iO1000(SerialPortHandler):
                     
                     # Log de datos recibidos
                     if incoming_line:
-                        self.logger.debug(f"📡 Serial data received: {repr(incoming_line)}")
+                        self.logger.debug(f"Serial data received: {repr(incoming_line)}")
                         
-                        # Para Edwards iO1000, cada línea es un evento completo
-                        # No esperamos líneas vacías
-                        self.logger.debug(f"🎯 Processing as complete event...")
+                        # Para Edwards iO1000, cada linea es un evento completo
+                        # No esperamos lineas vacias
+                        self.logger.debug(f"Processing as complete event...")
                         self.publish_parsed_event(incoming_line)
                 else:
                     time.sleep(0.1)
@@ -67,9 +67,9 @@ class Edwards_iO1000(SerialPortHandler):
 
     def parse_string_event(self, event: str) -> Dict[str, Any] | None:
         """
-        Parser híbrido que soporta dos formatos de Edwards iO1000:
+        Parser hibrido que soporta dos formatos de Edwards iO1000:
         1. Con pipe: 'EVENTO|FECHA HORA DETALLES'
-        2. Con espacios múltiples: 'EVENTO                FECHA HORA DETALLES'
+        2. Con espacios multiples: 'EVENTO                FECHA HORA DETALLES'
         """
         try:
             lines = list(filter(None, event.strip().split('\n')))
@@ -89,7 +89,7 @@ class Edwards_iO1000(SerialPortHandler):
                     self.logger.error(f"Invalid pipe format: {event}")
                     return None
             else:
-                # Si no tiene pipe, usar espacios múltiples (2 o más)
+                # Si no tiene pipe, usar espacios multiples (2 o mas)
                 parts = re.split(r'\s{2,}', line.strip())
                 
                 if len(parts) >= 2:
@@ -106,10 +106,10 @@ class Edwards_iO1000(SerialPortHandler):
             
             FACP_date = f"{time_date_metadata[0]} {time_date_metadata[1]}"
             
-            # Descripción es el resto de los metadatos
+            # Descripcion es el resto de los metadatos
             description = " | ".join(time_date_metadata[2:]) if len(time_date_metadata) > 2 else ""
             
-            # Agregar líneas adicionales si existen
+            # Agregar lineas adicionales si existen
             if len(lines) > 1:
                 description += "\n" + "\n".join(lines[1:])
 
@@ -124,6 +124,7 @@ class Edwards_iO1000(SerialPortHandler):
         except Exception as e:
             self.logger.exception(f"An error occurred while parsing the event: {event}")
             return None
+
 class Edwards_EST3x(SerialPortHandler):
     def __init__(self, config: Dict[str, Any], eventSeverityLevels: Dict[str, int], queue: SafeQueue):
         super().__init__(config, eventSeverityLevels, queue)
@@ -138,7 +139,6 @@ class Edwards_EST3x(SerialPortHandler):
             "xonxoff": False,
             "timeout": 1
         }
-
 
     def parse_string_event(self, event: str) -> Dict[str, Any] | None:
         try:
@@ -198,12 +198,42 @@ class Notifier_NFS(SerialPortHandler):
         self.max_report_delimiter_count = 2
         self.serial_config = {
             "baudrate": 9600,
-            "bytesize": 7,
-            "parity": "even",
+            "bytesize": 8,
+            "parity": "none",
             "stopbits": 1,
-            "xonxoff": True,
+            "xonxoff": False,
             "timeout": 1
         }
+
+    def process_incoming_data(self, shutdown_flag: threading.Event) -> None:
+        """
+        Procesa cada linea como un evento individual sin esperar lineas vacias
+        """
+        if self.ser is None:
+            raise ValueError("Serial port is not initialized")
+
+        try:
+            while not shutdown_flag.is_set():
+                if self.ser.in_waiting > 0:
+                    raw_data = self.ser.readline()
+                    incoming_line = raw_data.decode('latin-1').strip()
+                    
+                    # Log de datos recibidos
+                    if incoming_line:
+                        self.logger.debug(f"Serial data received: {repr(incoming_line)}")
+                        
+                        # Cada linea es un evento completo
+                        self.logger.debug(f"Processing as complete event...")
+                        self.publish_parsed_event(incoming_line)
+                else:
+                    time.sleep(0.1)
+        except (serial.SerialException, serial.SerialTimeoutException, OSError) as e:
+            raise serial.SerialException(str(e))
+        except (TypeError, UnicodeDecodeError) as e:
+            self.logger.error(f"Error decoding data: {e}")
+            raise TypeError(str(e))
+        except Exception as e:
+            raise Exception(f"Unexpected failure occurred: {str(e)}")
 
     def parse_string_event(self, event: str) -> Dict[str, Any] | None:
         try:
@@ -212,17 +242,46 @@ class Notifier_NFS(SerialPortHandler):
                 self.logger.error(f"Invalid event received: {event}")
                 return None
 
-            primary_data = re.split(r'\s{3,}', lines[0])
-            if len(primary_data) < 2:
-                self.logger.error(f"Invalid event received: {event}")
+            line = lines[0]
+            
+            # Patron para extraer timestamp del final: HH:MMA DDMMYY DDD
+            # Ejemplo: 02:49P 010726 Mie
+            timestamp_pattern = r'(\d{1,2}:\d{2}[AP])\s+(\d{6})\s+(\w+)\s*$'
+            timestamp_match = re.search(timestamp_pattern, line)
+            
+            if timestamp_match:
+                # Extraer timestamp
+                time_part = timestamp_match.group(1)  # 02:49P
+                date_part = timestamp_match.group(2)  # 010726
+                day_part = timestamp_match.group(3)   # Mie
+                FACP_date = f"{time_part} {date_part} {day_part}"
+                
+                # Remover el timestamp del final para obtener evento + descripcion
+                line_without_timestamp = line[:timestamp_match.start()].strip()
+            else:
+                # Si no hay timestamp, procesar toda la linea
+                FACP_date = ""
+                line_without_timestamp = line
+            
+            # Dividir por espacios multiples (3 o mas)
+            parts = re.split(r'\s{3,}', line_without_timestamp)
+            
+            if len(parts) >= 1:
+                ID_Event = parts[0].strip()
+                # Todo lo demas es descripcion
+                description = ' / '.join(parts[1:]).strip() if len(parts) > 1 else ""
+            else:
+                self.logger.error(f"Invalid event format: {event}")
                 return None
 
-            ID_Event = primary_data[0].strip()
-            description = ' / '.join(primary_data[1:]).strip()
-
+            # Agregar lineas adicionales si existen
             if len(lines) > 1:
-                description += "\n" + "\n".join(lines[1:])
+                if description:
+                    description += "\n" + "\n".join(lines[1:])
+                else:
+                    description = "\n".join(lines[1:])
 
+            # Determinar severidad
             severity = 3 if ":" in ID_Event else self.eventSeverityLevels.get(ID_Event, self.default_event_severity_not_recognized)
 
             return {
@@ -230,45 +289,13 @@ class Notifier_NFS(SerialPortHandler):
                 "description": description,
                 "severity": severity,
                 "SBC_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
-                "FACP_date": ""  # Notifier_NFS320 doesn't provide a panel date
+                "FACP_date": FACP_date
             }
 
         except Exception as e:
             self.logger.exception(f"An error occurred while parsing the event: {event}")
             return None
-    
-    def process_incoming_data(self, shutdown_flag: threading.Event) -> None:
-        buffer = ""
-        report_count = 0
-        add_blank_line = False
-        try:
-            while not shutdown_flag.is_set():
-                if self.ser and (self.ser.in_waiting > 0 or add_blank_line):
-                    if add_blank_line:
-                        add_blank_line = False  
-                        if_eof = self.handle_empty_line(buffer, report_count)
-                        if if_eof:
-                            buffer = ""
-                            report_count = 0
-                    else:
-                        raw_data = self.ser.readline()
-                        incoming_line = raw_data.decode('latin-1').strip()
-                        buffer, report_count = self.handle_data_line(incoming_line, buffer, report_count)
-                        add_blank_line = True 
-                else:
-                    time.sleep(0.1)
-        except (serial.SerialException, serial.SerialTimeoutException) as e:
-            raise serial.SerialException(str(e))
-        except (TypeError, UnicodeDecodeError) as e:
-            if buffer:
-                if report_count > 0:
-                    self.publish_parsed_report(buffer)
-                else:
-                    self.publish_parsed_event(buffer)
-            raise TypeError(str(e))
-        except Exception as e:
-            raise Exception(f"Unexpected failure occurred: {str(e)}")
-        
+
 class Simplex(SerialPortHandler):
     def __init__(self, config: Dict[str, Any], eventSeverityLevels: Dict[str, int], queue: SafeQueue):
         super().__init__(config, eventSeverityLevels, queue)
@@ -283,64 +310,64 @@ class Simplex(SerialPortHandler):
         }
 
     def parse_string_event(self, event: str) -> Dict[str, Any] | None:
-            """
-            Parser híbrido que soporta dos formatos de Edwards iO1000:
-            1. Con pipe: 'EVENTO|FECHA HORA DETALLES'
-            2. Con espacios múltiples: 'EVENTO                FECHA HORA DETALLES'
-            """
-            try:
-                lines = list(filter(None, event.strip().split('\n')))
-                if not lines:
-                    self.logger.error(f"Invalid event received: {event}")
-                    return None
-
-                line = lines[0]
-                
-                # Intentar primero con pipe '|' (formato original)
-                if '|' in line:
-                    primary_data = line.split('|')
-                    if len(primary_data) >= 2:
-                        ID_Event = primary_data[0].strip()
-                        time_date_metadata = primary_data[1].strip().split()
-                    else:
-                        self.logger.error(f"Invalid pipe format: {event}")
-                        return None
-                else:
-                    # Si no tiene pipe, usar espacios múltiples (2 o más)
-                    parts = re.split(r'\s{2,}', line.strip())
-                    
-                    if len(parts) >= 2:
-                        ID_Event = parts[0].strip()
-                        time_date_metadata = parts[1].strip().split()
-                    else:
-                        self.logger.error(f"Invalid space format: {event}")
-                        return None
-                
-                # Validar que tenemos al menos fecha y hora
-                if len(time_date_metadata) < 2:
-                    self.logger.error(f"Invalid date/time format: {event}")
-                    return None
-                
-                FACP_date = f"{time_date_metadata[0]} {time_date_metadata[1]}"
-                
-                # Descripción es el resto de los metadatos
-                description = " | ".join(time_date_metadata[2:]) if len(time_date_metadata) > 2 else ""
-                
-                # Agregar líneas adicionales si existen
-                if len(lines) > 1:
-                    description += "\n" + "\n".join(lines[1:])
-
-                return {
-                    "event": ID_Event,
-                    "description": description,
-                    "severity": self.eventSeverityLevels.get(ID_Event, self.default_event_severity_not_recognized),
-                    "SBC_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
-                    "FACP_date": FACP_date
-                }
-
-            except Exception as e:
-                self.logger.exception(f"An error occurred while parsing the event: {event}")
+        """
+        Parser hibrido que soporta dos formatos de Edwards iO1000:
+        1. Con pipe: 'EVENTO|FECHA HORA DETALLES'
+        2. Con espacios multiples: 'EVENTO                FECHA HORA DETALLES'
+        """
+        try:
+            lines = list(filter(None, event.strip().split('\n')))
+            if not lines:
+                self.logger.error(f"Invalid event received: {event}")
                 return None
+
+            line = lines[0]
+            
+            # Intentar primero con pipe '|' (formato original)
+            if '|' in line:
+                primary_data = line.split('|')
+                if len(primary_data) >= 2:
+                    ID_Event = primary_data[0].strip()
+                    time_date_metadata = primary_data[1].strip().split()
+                else:
+                    self.logger.error(f"Invalid pipe format: {event}")
+                    return None
+            else:
+                # Si no tiene pipe, usar espacios multiples (2 o mas)
+                parts = re.split(r'\s{2,}', line.strip())
+                
+                if len(parts) >= 2:
+                    ID_Event = parts[0].strip()
+                    time_date_metadata = parts[1].strip().split()
+                else:
+                    self.logger.error(f"Invalid space format: {event}")
+                    return None
+            
+            # Validar que tenemos al menos fecha y hora
+            if len(time_date_metadata) < 2:
+                self.logger.error(f"Invalid date/time format: {event}")
+                return None
+            
+            FACP_date = f"{time_date_metadata[0]} {time_date_metadata[1]}"
+            
+            # Descripcion es el resto de los metadatos
+            description = " | ".join(time_date_metadata[2:]) if len(time_date_metadata) > 2 else ""
+            
+            # Agregar lineas adicionales si existen
+            if len(lines) > 1:
+                description += "\n" + "\n".join(lines[1:])
+
+            return {
+                "event": ID_Event,
+                "description": description,
+                "severity": self.eventSeverityLevels.get(ID_Event, self.default_event_severity_not_recognized),
+                "SBC_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
+                "FACP_date": FACP_date
+            }
+
+        except Exception as e:
+            self.logger.exception(f"An error occurred while parsing the event: {event}")
+            return None
                 
     def process_incoming_data(self, shutdown_flag: threading.Event) -> None:
         if self.ser is None:
